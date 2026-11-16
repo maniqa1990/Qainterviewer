@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Simulador de Entrevistas QA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+[hidden]{display:none!important}
+:root{color-scheme:light}
+img{max-width:100%}
+/* Layout concept: una sala de práctica con forma de reporte de pruebas. Un reloj de 10 min con marca a los 2:00 (ES → EN), un chat tipo videollamada y un resultado con formato PASSED / FAILED. */
+:root{
+  --bg:#F1F4F2; --surface:#FFFFFF; --surface-2:#E8EDEA; --ink:#15201B; --muted:#56675E; --line:#D0D9D4;
+  --accent:#1F5FBF; --accent-ink:#FFFFFF; --accent-soft:#DDE8F8;
+  --pass:#1B7F4B; --pass-bg:#E1F3E8; --fail:#B42318; --fail-bg:#FBE6E3; --warn:#8A5A00; --warn-bg:#FBEFD3;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1513; --surface:#172019; --surface-2:#1D2823; --ink:#E6EDE9; --muted:#93A59B; --line:#2B3832;
+    --accent:#6EA2FF; --accent-ink:#0B1424; --accent-soft:#1D2F4C;
+    --pass:#4CC38A; --pass-bg:#12291D; --fail:#F2837A; --fail-bg:#32171A; --warn:#E3B341; --warn-bg:#2E2410;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1513; --surface:#172019; --surface-2:#1D2823; --ink:#E6EDE9; --muted:#93A59B; --line:#2B3832;
+  --accent:#6EA2FF; --accent-ink:#0B1424; --accent-soft:#1D2F4C;
+  --pass:#4CC38A; --pass-bg:#12291D; --fail:#F2837A; --fail-bg:#32171A; --warn:#E3B341; --warn-bg:#2E2410;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55;
+  padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.app{max-width:1040px; margin:0 auto; display:grid; gap:22px}
+h1{font-size:clamp(1.5rem,1.1rem + 1.6vw,2.1rem); line-height:1.15; margin:0; font-weight:600; letter-spacing:-.01em; text-wrap:balance}
+h2{font-size:1.05rem; margin:0 0 10px; font-weight:600; text-wrap:balance}
+p{margin:0}
+.eyebrow{font:500 .74rem var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:6px}
+.top{display:flex; flex-wrap:wrap; gap:12px 20px; justify-content:space-between; align-items:flex-end}
+.status{font:400 .8rem var(--mono); color:var(--muted); min-width:0}
+.muted{color:var(--muted)}
+.small{font-size:.85rem}
+
+/* controls */
+.btn{
+  font:500 .92rem var(--sans); border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  padding:9px 16px; border-radius:6px; cursor:pointer; min-height:40px;
+}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--fail); border-color:var(--fail)}
+.btn.on{background:var(--fail-bg); border-color:var(--fail); color:var(--fail)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+label.f{display:grid; gap:6px; font-weight:500; font-size:.88rem}
+input[type=text],textarea,select{
+  font:400 .95rem var(--sans); color:var(--ink); background:var(--surface); border:1px solid var(--line);
+  border-radius:6px; padding:9px 11px; width:100%; min-width:0;
+}
+textarea{resize:vertical; line-height:1.5}
+.check{display:flex; gap:8px; align-items:center; font-weight:400; font-size:.9rem}
+.check input{width:auto; margin:0}
+
+/* setup */
+.setup{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:24px; align-items:start}
+.col{display:grid; gap:16px; min-width:0}
+.rowbtn{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.count{font:400 .78rem var(--mono); color:var(--muted)}
+.startbar{display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; grid-column:1/-1; padding-top:4px; border-top:1px solid var(--line); padding-top:16px}
+.hist{list-style:none; margin:0; padding:0; display:grid; gap:0}
+.hist li{display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-top:1px solid var(--line); font-size:.88rem}
+.hist .mono{font-family:var(--mono)}
+.hist .btn{min-height:32px; padding:4px 10px; font-size:.82rem}
+.rec-note{display:inline-block; font:500 .7rem var(--mono); letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin-right:6px}
+.tagpass{color:var(--pass)} .tagfail{color:var(--fail)}
+
+/* room */
+.room{display:grid; gap:14px}
+.clock{display:grid; gap:8px}
+.clock-head{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:6px 16px}
+.clock-time{font:600 1.7rem var(--mono); font-variant-numeric:tabular-nums; letter-spacing:-.01em}
+.clock-time small{font-size:.9rem; font-weight:400; color:var(--muted)}
+.clock.warn .clock-time{color:var(--warn)}
+.chip{font:500 .74rem var(--mono); letter-spacing:.06em; text-transform:uppercase; padding:4px 9px; border:1px solid var(--line); border-radius:4px; background:var(--surface)}
+.chip.en{background:var(--accent-soft); border-color:transparent}
+.track{position:relative; height:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:4px}
+.fill{height:100%; width:0; background:var(--accent); border-radius:3px}
+.tick{position:absolute; left:20%; top:-5px; bottom:-5px; width:2px; background:var(--ink)}
+.phases{display:grid; grid-template-columns:20% 1fr; font:500 .7rem var(--mono); color:var(--muted)}
+.phases span+span{padding-left:8px}
+.log{
+  display:flex; flex-direction:column; gap:14px; height:clamp(300px,52vh,540px); overflow-y:auto;
+  padding:16px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px;
+}
+.msg{display:grid; gap:4px; max-width:min(680px,92%); min-width:0}
+.msg.me{align-self:flex-end}
+.who{font:500 .7rem var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.msg.me .who{text-align:right}
+.bubble{padding:10px 13px; border:1px solid var(--line); background:var(--surface); border-radius:8px; white-space:pre-wrap; overflow-wrap:anywhere}
+.msg.me .bubble{background:var(--accent-soft); border-color:transparent}
+.bubble.pending{color:var(--muted); font-style:italic}
+.sysline{align-self:center; font:500 .72rem var(--mono); letter-spacing:.05em; color:var(--muted); text-transform:uppercase; text-align:center; padding:2px 0}
+.errbar{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 12px; border:1px solid var(--fail); background:var(--fail-bg); border-radius:6px; color:var(--ink)}
+.composer{display:grid; gap:8px}
+.composer-actions{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.composer-actions .spacer{flex:1}
+.partial{min-height:1.2em; font-size:.85rem; color:var(--muted); font-style:italic}
+.hint{font-size:.8rem; color:var(--muted)}
+
+/* report */
+.report{display:grid; gap:24px}
+.verdict{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px 18px; align-items:center; padding:20px; border:1px solid; border-radius:8px}
+.verdict.pass{background:var(--pass-bg); border-color:var(--pass); color:var(--pass)}
+.verdict.fail{background:var(--fail-bg); border-color:var(--fail); color:var(--fail)}
+.verdict .lab{font:500 .74rem var(--mono); letter-spacing:.1em; text-transform:uppercase}
+.verdict .big{font:600 clamp(1.7rem,1.2rem + 2vw,2.5rem) var(--mono); letter-spacing:-.01em; line-height:1.1}
+.verdict .score{font:600 clamp(1.7rem,1.2rem + 2vw,2.5rem) var(--mono); text-align:right; font-variant-numeric:tabular-nums}
+.verdict .score small{font-size:.9rem; font-weight:400}
+.verdict .headline{grid-column:1/-1; color:var(--ink); font-size:1rem}
+.crit{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 14px; padding:11px 0; border-top:1px solid var(--line)}
+.crit .name{font-weight:500}
+.crit .n{font:500 .85rem var(--mono); font-variant-numeric:tabular-nums; text-align:right}
+.crit .cm{grid-column:1/-1; color:var(--muted); font-size:.9rem}
+.segs{display:flex; gap:3px; align-items:center}
+.segs span{width:13px; height:8px; background:var(--surface-2); border:1px solid var(--line)}
+.segs span.on{background:var(--accent); border-color:var(--accent)}
+.cols{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:24px}
+.cols ul,.report ul.plain{margin:0; padding-left:18px; display:grid; gap:6px}
+details.ans{border-top:1px solid var(--line); padding:10px 0}
+details.ans summary{cursor:pointer; font-weight:500}
+details.ans .in{display:grid; gap:8px; padding-top:8px; font-size:.92rem}
+.lbl{font:500 .72rem var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.better{padding:10px 12px; border-left:3px solid var(--accent); background:var(--surface); border-radius:0 6px 6px 0}
+.en-row{display:grid; gap:2px; padding:9px 0; border-top:1px solid var(--line); font-size:.92rem}
+.en-row .x{color:var(--fail)} .en-row .y{color:var(--pass)}
+.actions{display:flex; flex-wrap:wrap; gap:10px}
+.transcript{display:grid; gap:8px; font-size:.88rem; padding-top:8px}
+.transcript p{white-space:pre-wrap; overflow-wrap:anywhere}
+.loading{padding:28px 0; display:grid; gap:12px; justify-items:start}
+.pulse{width:100%; height:6px; border-radius:3px; background:var(--surface-2); overflow:hidden; position:relative}
+.pulse::after{content:""; position:absolute; inset:0; width:30%; background:var(--accent); border-radius:3px; animation:slide 1.4s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+@media (prefers-reduced-motion: reduce){.pulse::after{animation:none; width:100%; opacity:.4}}
+@media (max-width:760px){
+  .setup{grid-template-columns:minmax(0,1fr)}
+  .verdict{grid-template-columns:minmax(0,1fr)}
+  .verdict .score{text-align:left}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <p class="eyebrow">Sala de práctica · 10 min · 2 min ES, luego EN</p>
+      <h1>Simulador de entrevistas QA</h1>
+    </div>
+    <p class="status" id="conn">Conectando…</p>
+  </header>
+
+  <main>
+    <!-- CONFIGURACIÓN -->
+    <section id="v-setup" class="setup" aria-label="Configuración">
+      <div class="col">
+        <h2>Tu entrevista</h2>
+        <label class="f" for="role">Puesto
+          <input type="text" id="role" autocomplete="off">
+        </label>
+        <label class="f" for="profile">Tu perfil (el entrevistador lo usa para personalizar)
+          <textarea id="profile" rows="6" placeholder="Ej: Años de experiencia, empresas donde has trabajado, herramientas que usas (Jira, TestRail, Postman) y tipo de proyectos."></textarea>
+        </label>
+        <label class="f" for="style">Estilo del entrevistador
+          <select id="style">
+            <option value="amable">Amable y conversacional</option>
+            <option value="estandar">Profesional y directo</option>
+            <option value="exigente">Exigente, pide ejemplos concretos</option>
+          </select>
+        </label>
+        <label class="f" for="code" id="codeWrap" hidden>Código de acceso
+          <input type="text" id="code" autocomplete="off" placeholder="El que te compartió quien publicó esta página">
+        </label>
+        <label class="check" for="voice" id="voiceWrap" hidden>
+          <input type="checkbox" id="voice"> Leer al entrevistador en voz alta
+        </label>
+        <div id="histBox" hidden>
+          <h2>Intentos anteriores</h2>
+          <ul class="hist" id="hist"></ul>
+          <p class="hint" style="margin-top:6px">Cada intento guarda tu transcripción y su calificación solo en este navegador.</p>
+        </div>
+      </div>
+
+      <div class="col">
+        <h2>Banco de preguntas</h2>
+        <p class="small muted">Una pregunta por línea. Las que aparecen son de ejemplo: reemplázalas pegando tu banco o cargando un archivo .txt, .md o .csv. El entrevistador elige y adapta las más relevantes.</p>
+        <label class="f" for="bank">Preguntas
+          <textarea id="bank" rows="16" spellcheck="false"></textarea>
+        </label>
+        <div class="rowbtn">
+          <label class="btn ghost" for="bankFile" style="display:inline-flex;align-items:center">Cargar archivo</label>
+          <input type="file" id="bankFile" accept=".txt,.md,.csv,text/plain" hidden>
+          <button class="btn ghost" id="bankClear" type="button">Vaciar</button>
+          <span class="count" id="bankCount"></span>
+        </div>
+      </div>
+
+      <div class="startbar">
+        <button class="btn primary" id="startBtn" type="button" disabled>Iniciar entrevista</button>
+        <p class="hint" id="startNote">Los primeros 2 minutos son en español y el resto en inglés. El reloj se detiene mientras el entrevistador responde. Al terminar recibes una calificación y feedback.</p>
+      </div>
+    </section>
+
+    <!-- SALA -->
+    <section id="v-room" class="room" hidden aria-label="Entrevista">
+      <div class="clock" id="clock">
+        <div class="clock-head">
+          <div class="clock-time"><span id="clockText">00:00</span> <small>/ 10:00</small></div>
+          <span class="chip" id="phaseChip">Fase 1 · Español</span>
+        </div>
+        <div class="track"><div class="fill" id="fill"></div><div class="tick"></div></div>
+        <div class="phases"><span>ES</span><span>EN</span></div>
+      </div>
+
+      <div class="log" id="log" role="log" aria-live="polite"></div>
+
+      <div class="errbar" id="err" hidden>
+        <span id="errText"></span>
+        <button class="btn" id="retryBtn" type="button">Reintentar</button>
+      </div>
+
+      <div class="composer">
+        <label class="f" for="answer"><span class="lbl" id="answerLbl">Tu respuesta</span>
+          <textarea id="answer" rows="3" placeholder="Escribe o dicta tu respuesta…"></textarea>
+        </label>
+        <p class="partial" id="partial" aria-live="off"></p>
+        <div class="composer-actions">
+          <button class="btn primary" id="sendBtn" type="button">Enviar</button>
+          <button class="btn" id="micBtn" type="button" hidden>Dictar</button>
+          <button class="btn ghost" id="voiceBtn" type="button" hidden>Voz: apagada</button>
+          <span class="spacer"></span>
+          <button class="btn ghost" id="finishBtn" type="button">Terminar y calificar</button>
+          <button class="btn ghost" id="leaveBtn" type="button">Abandonar</button>
+        </div>
+        <p class="hint">Lo que dictes aparece aquí como texto y puedes corregirlo antes de enviar. Cada respuesta queda registrada en la transcripción. Ctrl/Cmd + Enter para enviar. <span id="micHint"></span></p>
+      </div>
+    </section>
+
+    <!-- RESULTADO -->
+    <section id="v-result" hidden aria-label="Resultado">
+      <div class="report" id="report"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var TOTAL = 600, SWITCH = 120, WRAP = 540;
+
+var DEFAULT_BANK = [
+  'Tell me about a critical bug you found right before a release. How did you communicate it to the team?',
+  'What is the difference between severity and priority? Give me an example of each.',
+  'How would you test a login form? Walk me through your approach.',
+  'Explain boundary value analysis and equivalence partitioning with a concrete example.',
+  'What is the difference between smoke testing and sanity testing?',
+  'How do you write a good bug report? What must it include?',
+  'Tell me about a time you disagreed with a developer about whether something was a bug.',
+  'What do you do when the requirements are ambiguous or incomplete?',
+  'How do you decide what to test first when time is limited?',
+  'What is regression testing, and how do you decide what goes into a regression suite?',
+  'Describe the bug lifecycle in your last team.',
+  'How do you test a feature when there is no documentation at all?',
+  'How do you handle a bug you cannot reproduce consistently?',
+  'What edge cases would you consider for a date picker?',
+  'Have you tested APIs manually? How would you validate a POST endpoint with Postman?',
+  'How do you work with a distributed team across different time zones?',
+  'Tell me about a time you had to learn a new tool or domain very quickly.',
+  'Why are you looking for a new opportunity right now?'
+].join('\n');
+
+var DEFAULT_PROFILE = '';
+
+var STYLES = {
+  amable: 'Amable y conversacional: animas al candidato, pero evalúas con seriedad.',
+  estandar: 'Profesional y directo, como un entrevistador real de una empresa de EE. UU.',
+  exigente: 'Exigente: profundizas con preguntas de seguimiento, pides ejemplos concretos y no aceptas respuestas genéricas.'
+};
+
+/* ---------- utilidades ---------- */
+function $(s){ return document.querySelector(s); }
+function h(tag, attrs){
+  var el = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(function(k){
+    if (k === 'class') el.className = attrs[k];
+    else if (k === 'text') el.textContent = attrs[k];
+    else el.setAttribute(k, attrs[k]);
+  });
+  for (var i = 2; i < arguments.length; i++){
+    var kids = [].concat(arguments[i]);
+    kids.forEach(function(k){
+      if (k === null || k === undefined || k === false) return;
+      el.append(k && k.nodeType ? k : document.createTextNode(String(k)));
+    });
+  }
+  return el;
+}
+function store(key, val){
+  try {
+    if (arguments.length === 1){ var v = localStorage.getItem(key); return v === null ? null : JSON.parse(v); }
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (e) {}
+  return null;
+}
+function fmt(sec){
+  sec = Math.max(0, Math.floor(sec));
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+function clamp(n, a, b){ return Math.min(b, Math.max(a, n)); }
+function parseBank(txt){
+  return String(txt || '').split(/\r?\n/)
+    .map(function(l){ return l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim(); })
+    .filter(function(l){ return l.length > 3; });
+}
+
+/* ---------- estado ---------- */
+var S = {
+  messages: [], elapsed: 0, running: false, busy: false, lastTick: 0, timer: null,
+  switched: false, closing: false, evaluating: false, voice: false,
+  ctl: null, evalCtl: null, cfg: null, report: null, confirmFinish: null, dictPending: false
+};
+var sample = null, dict = null, downloads = null;
+
+function phase(){ return S.elapsed < SWITCH ? 'es' : 'en'; }
+
+/* ---------- vistas ---------- */
+function showView(name){
+  ['setup','room','result'].forEach(function(v){ $('#v-' + v).hidden = (v !== name); });
+  window.scrollTo(0, 0);
+}
+
+/* ---------- configuración ---------- */
+function loadCfg(){
+  var c = store('qa-sim-cfg') || {};
+  $('#role').value = c.role || 'QA Manual Engineer (semi-senior), 100 % remoto desde Colombia';
+  $('#profile').value = c.profile || DEFAULT_PROFILE;
+  $('#style').value = c.style || 'estandar';
+  $('#bank').value = (typeof c.bank === 'string') ? c.bank : DEFAULT_BANK;
+  S.voice = !!c.voice;
+  $('#voice').checked = S.voice;
+  updateCount();
+}
+function readCfg(){
+  return {
+    role: $('#role').value.trim(),
+    profile: $('#profile').value.trim(),
+    style: $('#style').value,
+    bank: $('#bank').value,
+    voice: $('#voice').checked
+  };
+}
+function saveCfg(){ store('qa-sim-cfg', readCfg()); }
+function updateCount(){
+  var n = parseBank($('#bank').value).length;
+  $('#bankCount').textContent = n + (n === 1 ? ' pregunta' : ' preguntas');
+}
+function renderHistory(){
+  var items = store('qa-sim-hist') || [];
+  var box = $('#histBox'), ul = $('#hist');
+  ul.replaceChildren();
+  box.hidden = !items.length;
+  items.slice().reverse().slice(0, 8).forEach(function(it){
+    var d = new Date(it.at);
+    var date = isNaN(d) ? '' : d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+    var view = null;
+    if (it.report){
+      view = h('button', { class: 'btn ghost', type: 'button', text: 'Ver revisión' });
+      view.onclick = function(){ openSaved(it); };
+    }
+    ul.append(h('li', null,
+      h('span', { class: 'mono', text: date + ' · ' + it.score + '/100' }),
+      h('span', { class: it.approved ? 'tagpass' : 'tagfail', text: it.approved ? 'Aprobado' : 'No aprobado' }),
+      view
+    ));
+  });
+}
+function openSaved(it){
+  S.running = false; clearInterval(S.timer);
+  showView('result');
+  renderReport(it.report, Array.isArray(it.messages) ? it.messages : []);
+}
+function saveHistory(d){
+  var items = store('qa-sim-hist') || [];
+  items.push({ at: Date.now(), score: clamp(Math.round(Number(d.score) || 0), 0, 100), approved: d.approved === true, messages: S.messages, report: d });
+  store('qa-sim-hist', items.slice(-10));
+  renderHistory();
+}
+
+/* ---------- prompts ---------- */
+function rules(){
+  var c = S.cfg;
+  var bank = parseBank(c.bank).map(function(q){ return '- ' + q; }).join('\n').slice(0, 30000);
+  return [
+    'Eres "Alex Rivera", entrevistador técnico de QA en una empresa de staffing de software que coloca ingenieros de QA de Latinoamérica en equipos de clientes de EE. UU. Estás entrevistando por videollamada a un candidato para el puesto: ' + (c.role || 'QA Manual Engineer') + '.',
+    '',
+    'Perfil del candidato (úsalo para personalizar, sin recitarlo): ' + (c.profile || 'no indicado'),
+    'Estilo: ' + (STYLES[c.style] || STYLES.estandar),
+    '',
+    'Reglas:',
+    '- Hablas como en una entrevista real: de 1 a 3 frases por turno, tono natural. Una sola pregunta a la vez. Sin markdown, sin listas, sin emojis y sin acotaciones entre paréntesis. Escribe solo lo que dirías en voz alta.',
+    '- Reacciona en una frase a lo que dijo el candidato y luego avanza, o profundiza con una pregunta de seguimiento cuando la respuesta sea vaga, incompleta o sin ejemplos.',
+    '- No des feedback, pistas ni respuestas correctas durante la entrevista. No reveles que es una simulación ni cómo se califica.',
+    '- Fase 1 (primeros 2 minutos, en ESPAÑOL): saludo, presentación breve, "cuéntame de ti", por qué le interesa el rol y su situación actual. Es una charla tipo reclutador.',
+    '- Fase 2 (desde el minuto 2 hasta el 10, en INGLÉS): preguntas técnicas y de comportamiento. La primera vez que pases a inglés, di una frase corta y natural de transición (a partir de ahora siguen en inglés porque trabajará con clientes de EE. UU.). Después responde SIEMPRE en inglés. Si el candidato contesta en español, pídele con amabilidad que lo intente en inglés.',
+    '- Usa el banco de preguntas como base: elige las más relevantes para este perfil, en cualquier orden, adáptalas a la conversación y tradúcelas al idioma actual si hace falta. Mezcla preguntas técnicas y de comportamiento. No las leas como lista ni las repitas.',
+    '- Al final de cada mensaje del candidato hay una nota del sistema entre corchetes con el tiempo y el idioma que debes usar. Es información interna: obedécela y nunca la menciones.',
+    '',
+    'BANCO DE PREGUNTAS:',
+    bank || '- (vacío: improvisa preguntas típicas de QA manual semi-senior)'
+  ].join('\n');
+}
+function buildInput(){
+  var turns = [{ role: 'user', content: rules() + '\n\nComienza la entrevista ahora.' }];
+  S.messages.forEach(function(m){ turns.push({ role: m.role, content: m.text }); });
+  var ph = phase();
+  var state = '\n\n[Nota del sistema: llevan ' + fmt(S.elapsed) + ' de 10:00. Idioma que debes usar ahora: ' + (ph === 'es' ? 'ESPAÑOL' : 'INGLÉS') + '.' +
+    (S.elapsed >= WRAP ? ' Queda menos de un minuto: cierra la entrevista con una despedida breve y cálida, sin hacer nuevas preguntas.' : '') + ']';
+  turns[turns.length - 1].content += state;
+  return turns;
+}
+function evalPrompt(){
+  var c = S.cfg;
+  var transcript = S.messages.map(function(m){
+    return '[' + fmt(m.t) + '] ' + (m.role === 'assistant' ? 'ENTREVISTADOR' : (m.voice ? 'CANDIDATO (dictado por voz)' : 'CANDIDATO')) + ': ' + m.text;
+  }).join('\n');
+  var answered = S.messages.filter(function(m){ return m.role === 'user'; }).length;
+  return [
+    'Eres un evaluador senior de entrevistas de QA. Evalúa esta simulación de entrevista para el puesto: ' + (c.role || 'QA Manual Engineer') + ' (nivel semi-senior, remoto, equipos de EE. UU.). La fase 1 (0:00 a 2:00) fue en español y la fase 2 (desde 2:00) en inglés.',
+    'Perfil declarado del candidato: ' + (c.profile || 'no indicado'),
+    'Cantidad de respuestas del candidato: ' + answered + '.',
+    '',
+    'Reglas de evaluación:',
+    '- Basa todo únicamente en la transcripción. No inventes ni atribuyas al candidato nada que no aparezca en ella.',
+    '- Sé realista y exigente como un reclutador técnico de una empresa de EE. UU. Aprobado solo si la nota es 70 o más y no hay carencias críticas (por ejemplo: no distinguir severidad de prioridad, respuestas sin ejemplos concretos, o un inglés que impida comunicarse).',
+    '- Si el candidato respondió menos de 3 veces, dilo claramente: hay poca evidencia, y no infles la nota.',
+    '- Todo el feedback va en español. Las frases del candidato y las "better" / "better_answer" van en el idioma en que se habló en ese punto.',
+    '- Las respuestas marcadas como "dictado por voz" son transcripción automática del habla del candidato: no penalices puntuación, mayúsculas ni palabras mal transcritas. Evalúa contenido, estructura y fluidez.',
+    '- Frases cortas y concretas, sin relleno.',
+    '',
+    'Devuelve SOLO un objeto JSON con esta forma exacta:',
+    '{"approved": true|false, "score": 0-100, "headline": "una frase que resume el resultado",',
+    ' "criteria": [{"name": "Conocimiento técnico de QA", "score": 0-10, "comment": "..."}, {"name": "Edge cases y pensamiento crítico", ...}, {"name": "Comunicación y claridad", ...}, {"name": "Inglés", ...}, {"name": "Ejemplos concretos (método STAR)", ...}, {"name": "Actitud y encaje en trabajo remoto", ...}],',
+    ' "strengths": ["..."], "improvements": ["..."],',
+    ' "answers": [{"question": "pregunta resumida", "candidate_said": "resumen breve de lo que dijo", "feedback": "qué estuvo bien y qué faltó", "better_answer": "ejemplo de respuesta más sólida en 2 o 3 frases"}],',
+    ' "english_notes": [{"said": "frase del candidato", "better": "versión mejorada", "why": "motivo breve"}],',
+    ' "next_steps": ["..."]}',
+    'Límites: strengths 3 a 4 ítems, improvements 3 a 5, answers hasta 5 (las más importantes), english_notes hasta 5 (lista vacía si hubo muy poco inglés), next_steps 3.',
+    '',
+    'TRANSCRIPCIÓN:',
+    transcript
+  ].join('\n');
+}
+
+/* ---------- chat ---------- */
+function scrollLog(){ var l = $('#log'); l.scrollTop = l.scrollHeight; }
+function addBubble(role, text, t, pending, voice){
+  var who = (role === 'assistant' ? 'Entrevistador' : 'Tú') + ' · ' + fmt(t) + (voice ? ' · voz' : '');
+  var body = h('div', { class: 'bubble' + (pending ? ' pending' : ''), text: text });
+  var el = h('div', { class: 'msg ' + (role === 'assistant' ? 'them' : 'me') }, h('div', { class: 'who', text: who }), body);
+  $('#log').append(el);
+  scrollLog();
+  return { el: el, body: body };
+}
+function addSys(text){ $('#log').append(h('div', { class: 'sysline', text: text })); scrollLog(); }
+function setComposer(){
+  var off = S.busy || !S.running;
+  $('#answer').disabled = off;
+  $('#sendBtn').disabled = off;
+  $('#micBtn').disabled = !S.running;
+  $('#answer').placeholder = phase() === 'es' ? 'Escribe o dicta tu respuesta…' : 'Type or dictate your answer in English…';
+  $('#answerLbl').textContent = phase() === 'es' ? 'Tu respuesta' : 'Your answer';
+}
+function showError(e){
+  var code = e && e.code;
+  var msg = {
+    not_granted: 'Debes permitir que esta página use Claude para que el entrevistador pueda responder.',
+    sampling_disabled: 'Claude no está disponible para esta cuenta.',
+    rate_limited: 'Se alcanzó el límite de uso. Espera un momento y reintenta.',
+    session_expired: 'Tu sesión expiró. Vuelve a iniciar sesión y reintenta.',
+    refused: 'Claude no pudo responder a ese mensaje. Reformúlalo y reintenta.',
+    unauthorized: 'Falta el código de acceso o es incorrecto. Vuelve al inicio e introdúcelo.',
+    too_large: 'Tu perfil o tu banco de preguntas es demasiado largo. Acórtalo e inténtalo de nuevo.',
+    server_misconfigured: 'El servidor todavía no está configurado (falta la clave de API).'
+  }[code] || 'Falló la conexión con el entrevistador. Reintenta.';
+  $('#errText').textContent = msg;
+  $('#retryBtn').hidden = (code === 'not_granted' || code === 'sampling_disabled' || code === 'capability_disabled' || code === 'not_declared' || code === 'unauthorized' || code === 'too_large' || code === 'server_misconfigured');
+  $('#err').hidden = false;
+}
+function clearError(){ $('#err').hidden = true; }
+
+function stopSpeech(){ try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {} }
+function speak(text, lang){
+  if (!S.voice || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = lang === 'es' ? 'es-CO' : 'en-US';
+    var v = window.speechSynthesis.getVoices().filter(function(x){ return x.lang.toLowerCase().indexOf(lang) === 0; })[0];
+    if (v) u.voice = v;
+    window.speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+async function askInterviewer(){
+  if (!sample) return;
+  S.busy = true; setComposer(); clearError();
+  var t = S.elapsed, ph = phase(), wrapping = S.elapsed >= WRAP;
+  var b = addBubble('assistant', 'Pensando…', t, true);
+  var ctl = new AbortController(); S.ctl = ctl;
+  try {
+    var res = await sample(buildInput(), {
+      modelTier: 'quick', cache: false, signal: ctl.signal,
+      onText: function(u){ b.body.classList.remove('pending'); b.body.textContent = u.text; scrollLog(); }
+    });
+    var clean = res.text.trim();
+    b.body.classList.remove('pending'); b.body.textContent = clean;
+    S.messages.push({ role: 'assistant', text: clean, t: t });
+    speak(clean, ph);
+    if (wrapping) S.closing = true;
+  } catch (e) {
+    b.el.remove();
+    if (!(e && e.code === 'cancelled')) showError(e);
+  } finally {
+    S.busy = false; S.lastTick = performance.now(); setComposer();
+    if (S.running) { try { $('#answer').focus(); } catch (e2) {} }
+  }
+  if (S.closing && S.running && !S.evaluating) setTimeout(function(){ if (S.running) evaluate(); }, 1800);
+}
+
+function send(){
+  if (S.busy || !S.running) return;
+  var ta = $('#answer'), text = ta.value.trim();
+  if (!text) return;
+  stopSpeech();
+  if (dict && dict.active()) dict.stop();
+  $('#partial').textContent = '';
+  var viaVoice = S.dictPending; S.dictPending = false;
+  S.messages.push({ role: 'user', text: text, t: S.elapsed, voice: viaVoice });
+  addBubble('user', text, S.elapsed, false, viaVoice);
+  ta.value = '';
+  askInterviewer();
+}
+
+/* ---------- reloj ---------- */
+function updateClock(){
+  var el = Math.min(S.elapsed, TOTAL);
+  $('#clockText').textContent = fmt(el);
+  $('#fill').style.width = (el / TOTAL * 100) + '%';
+  var en = phase() === 'en';
+  var chip = $('#phaseChip');
+  chip.textContent = en ? 'Phase 2 · English' : 'Fase 1 · Español';
+  chip.classList.toggle('en', en);
+  $('#clock').classList.toggle('warn', TOTAL - el <= 60);
+}
+function tick(){
+  var now = performance.now();
+  var dt = (now - S.lastTick) / 1000;
+  S.lastTick = now;
+  if (S.running && !S.busy) S.elapsed += dt;
+  if (S.running && !S.switched && S.elapsed >= SWITCH){
+    S.switched = true;
+    addSys('Desde aquí la entrevista sigue en inglés · From now on, English only');
+    setComposer();
+  }
+  updateClock();
+  if (S.running && S.elapsed >= TOTAL){
+    S.elapsed = TOTAL; updateClock();
+    $('#sendBtn').disabled = true;
+    evaluate();
+  }
+}
+
+/* ---------- inicio / fin ---------- */
+function startInterview(){
+  if (!sample) return;
+  var cfg = readCfg();
+  store('qa-sim-cfg', cfg);
+  S.cfg = cfg;
+  S.voice = cfg.voice;
+  S.messages = []; S.elapsed = 0; S.switched = false; S.closing = false; S.evaluating = false; S.report = null; S.dictPending = false;
+  S.running = true; S.busy = false; S.lastTick = performance.now();
+  $('#log').replaceChildren(); clearError(); $('#answer').value = ''; $('#partial').textContent = '';
+  resetFinish();
+  updateVoiceBtn();
+  showView('room');
+  updateClock(); setComposer();
+  clearInterval(S.timer);
+  S.timer = setInterval(tick, 250);
+  askInterviewer();
+}
+function resetFinish(){
+  clearTimeout(S.confirmFinish); S.confirmFinish = null;
+  $('#finishBtn').textContent = 'Terminar y calificar';
+  $('#finishBtn').classList.remove('danger');
+}
+function onFinish(){
+  if (S.confirmFinish){ resetFinish(); evaluate(); return; }
+  $('#finishBtn').textContent = 'Confirmar: calificar ahora';
+  $('#finishBtn').classList.add('danger');
+  S.confirmFinish = setTimeout(resetFinish, 4000);
+}
+function leave(){
+  S.running = false; clearInterval(S.timer);
+  if (S.ctl) S.ctl.abort();
+  if (S.evalCtl) S.evalCtl.abort();
+  if (dict && dict.active()) dict.stop();
+  stopSpeech(); resetFinish();
+  S.busy = false; S.evaluating = false;
+  renderHistory();
+  showView('setup');
+}
+
+/* ---------- evaluación ---------- */
+function renderLoading(){
+  var r = $('#report'); r.replaceChildren();
+  var cancel = h('button', { class: 'btn ghost', type: 'button', text: 'Cancelar' });
+  cancel.onclick = function(){ if (S.evalCtl) S.evalCtl.abort(); leave(); };
+  r.append(h('div', { class: 'loading' },
+    h('h2', { text: 'Calificando tu entrevista…' }),
+    h('p', { class: 'muted', text: 'Claude está revisando la transcripción completa. Puede tardar hasta un minuto.' }),
+    h('div', { class: 'pulse' }),
+    cancel
+  ));
+}
+function renderEvalError(e){
+  var r = $('#report'); r.replaceChildren();
+  var again = h('button', { class: 'btn primary', type: 'button', text: 'Reintentar calificación' });
+  again.onclick = function(){ evaluate(); };
+  var back = h('button', { class: 'btn ghost', type: 'button', text: 'Volver al inicio' });
+  back.onclick = function(){ leave(); };
+  var msg = (e && e.code === 'invalid_json')
+    ? 'La calificación llegó incompleta. Intenta de nuevo.'
+    : (e && e.code === 'rate_limited') ? 'Se alcanzó el límite de uso. Espera un momento y reintenta.'
+    : 'No se pudo calificar la entrevista. Tu transcripción sigue aquí; reintenta.';
+  r.append(h('div', { class: 'loading' }, h('h2', { text: 'No se pudo calificar' }), h('p', { class: 'muted', text: msg }),
+    h('div', { class: 'actions' }, again, back)));
+}
+async function evaluate(){
+  if (S.evaluating) return;
+  S.evaluating = true; S.running = false; clearInterval(S.timer);
+  if (dict && dict.active()) dict.stop();
+  stopSpeech(); resetFinish();
+  showView('result'); renderLoading();
+  var ctl = new AbortController(); S.evalCtl = ctl;
+  try {
+    var d = await sample.json(evalPrompt(), { signal: ctl.signal, cache: false });
+    if (!d || typeof d !== 'object') throw { code: 'invalid_json' };
+    S.report = d;
+    renderReport(d);
+    saveHistory(d);
+  } catch (e) {
+    if (e && e.code === 'cancelled') return;
+    renderEvalError(e);
+  } finally {
+    S.evaluating = false;
+  }
+}
+function list(items, cls){
+  var arr = Array.isArray(items) ? items.filter(function(x){ return typeof x === 'string' && x.trim(); }) : [];
+  if (!arr.length) return h('p', { class: 'muted small', text: 'Sin elementos.' });
+  return h('ul', { class: cls || '' }, arr.map(function(x){ return h('li', { text: x }); }));
+}
+function transcriptText(msgs){
+  return msgs.map(function(m){
+    return '[' + fmt(m.t) + '] ' + (m.role === 'assistant' ? 'Entrevistador' : 'Tú' + (m.voice ? ' (voz)' : '')) + ': ' + m.text;
+  }).join('\n\n');
+}
+function reportText(d){
+  var L = [];
+  L.push((d.approved ? 'APROBADO' : 'NO APROBADO') + ' · ' + d.score + '/100');
+  if (d.headline) L.push(d.headline);
+  L.push('', 'CRITERIOS');
+  (d.criteria || []).forEach(function(c){ L.push('- ' + c.name + ': ' + c.score + '/10. ' + (c.comment || '')); });
+  L.push('', 'FORTALEZAS'); (d.strengths || []).forEach(function(x){ L.push('- ' + x); });
+  L.push('', 'A MEJORAR'); (d.improvements || []).forEach(function(x){ L.push('- ' + x); });
+  L.push('', 'RESPUESTAS');
+  (d.answers || []).forEach(function(a){ L.push('- ' + a.question + '\n  Feedback: ' + (a.feedback || '') + '\n  Mejor respuesta: ' + (a.better_answer || '')); });
+  L.push('', 'INGLÉS');
+  (d.english_notes || []).forEach(function(n){ L.push('- "' + n.said + '" → "' + n.better + '" (' + (n.why || '') + ')'); });
+  L.push('', 'PRÓXIMOS PASOS'); (d.next_steps || []).forEach(function(x){ L.push('- ' + x); });
+  return L.join('\n');
+}
+function renderReport(d, msgs){
+  msgs = msgs || S.messages;
+  var r = $('#report'); r.replaceChildren();
+  var score = clamp(Math.round(Number(d.score) || 0), 0, 100);
+  var ok = d.approved === true;
+  d.score = score;
+
+  r.append(h('div', { class: 'verdict ' + (ok ? 'pass' : 'fail') },
+    h('div', null, h('div', { class: 'lab', text: 'Resultado de la simulación' }), h('div', { class: 'big', text: ok ? 'APROBADO' : 'NO APROBADO' })),
+    h('div', { class: 'score' }, String(score), h('small', { text: ' / 100' })),
+    d.headline ? h('p', { class: 'headline', text: String(d.headline) }) : null
+  ));
+
+  var crit = Array.isArray(d.criteria) ? d.criteria : [];
+  if (crit.length){
+    var box = h('div', null, h('h2', { text: 'Criterios' }));
+    crit.forEach(function(c){
+      var n = clamp(Math.round(Number(c.score) || 0), 0, 10);
+      var segs = h('div', { class: 'segs', 'aria-hidden': 'true' });
+      for (var i = 1; i <= 10; i++) segs.append(h('span', { class: i <= n ? 'on' : '' }));
+      box.append(h('div', { class: 'crit' },
+        h('div', { class: 'name', text: String(c.name || '') }),
+        h('div', { class: 'segs-wrap', style: 'display:flex;gap:10px;align-items:center;justify-content:flex-end' }, segs, h('span', { class: 'n', text: n + '/10' })),
+        c.comment ? h('div', { class: 'cm', text: String(c.comment) }) : null
+      ));
+    });
+    r.append(box);
+  }
+
+  r.append(h('div', { class: 'cols' },
+    h('div', null, h('h2', { text: 'Lo que hiciste bien' }), list(d.strengths)),
+    h('div', null, h('h2', { text: 'Para mejorar' }), list(d.improvements))
+  ));
+
+  var answers = Array.isArray(d.answers) ? d.answers : [];
+  if (answers.length){
+    var ab = h('div', null, h('h2', { text: 'Revisión de tus respuestas' }));
+    answers.forEach(function(a, i){
+      ab.append(h('details', { class: 'ans' },
+        h('summary', { text: String(a.question || 'Pregunta ' + (i + 1)) }),
+        h('div', { class: 'in' },
+          a.candidate_said ? h('div', null, h('div', { class: 'lbl', text: 'Lo que dijiste' }), h('p', { text: String(a.candidate_said) })) : null,
+          a.feedback ? h('div', null, h('div', { class: 'lbl', text: 'Feedback' }), h('p', { text: String(a.feedback) })) : null,
+          a.better_answer ? h('div', { class: 'better' }, h('div', { class: 'lbl', text: 'Una respuesta más sólida' }), h('p', { text: String(a.better_answer) })) : null
+        )
+      ));
+    });
+    r.append(ab);
+  }
+
+  var en = Array.isArray(d.english_notes) ? d.english_notes : [];
+  if (en.length){
+    var eb = h('div', null, h('h2', { text: 'Tu inglés' }));
+    en.forEach(function(n){
+      eb.append(h('div', { class: 'en-row' },
+        h('div', { class: 'x', text: 'Dijiste: ' + String(n.said || '') }),
+        h('div', { class: 'y', text: 'Mejor: ' + String(n.better || '') }),
+        n.why ? h('div', { class: 'muted', text: String(n.why) }) : null
+      ));
+    });
+    r.append(eb);
+  }
+
+  r.append(h('div', null, h('h2', { text: 'Próximos pasos' }), list(d.next_steps)));
+
+  var userMsgs = msgs.filter(function(m){ return m.role === 'user'; });
+  var voiceCount = userMsgs.filter(function(m){ return m.voice; }).length;
+  var rec = h('div', null, h('h2', { text: 'Registro de tus respuestas' }),
+    h('p', { class: 'muted small', text: voiceCount + ' de ' + userMsgs.length + ' respuestas fueron dictadas por voz y quedaron registradas en texto.' }));
+  msgs.forEach(function(m, i){
+    if (m.role !== 'user') return;
+    var q = (i > 0 && msgs[i - 1].role === 'assistant') ? msgs[i - 1].text : '';
+    var short = q ? (q.length > 90 ? q.slice(0, 90) + '…' : q) : 'Respuesta';
+    rec.append(h('details', { class: 'ans' },
+      h('summary', null, m.voice ? h('span', { class: 'rec-note', text: 'voz' }) : null, '[' + fmt(m.t) + '] ' + short),
+      h('div', { class: 'in' },
+        q ? h('div', null, h('div', { class: 'lbl', text: 'Pregunta' }), h('p', { text: q })) : null,
+        h('div', null, h('div', { class: 'lbl', text: m.voice ? 'Tu respuesta (dictada)' : 'Tu respuesta' }), h('p', { style: 'white-space:pre-wrap;overflow-wrap:anywhere', text: m.text }))
+      )
+    ));
+  });
+  r.append(rec);
+
+  var tr = h('details', { class: 'ans' }, h('summary', { text: 'Ver la transcripción completa' }),
+    h('div', { class: 'transcript' }, msgs.map(function(m){
+      return h('p', null, '[' + fmt(m.t) + '] ' + (m.role === 'assistant' ? 'Entrevistador' : 'Tú' + (m.voice ? ' (voz)' : '')) + ': ' + m.text);
+    })));
+  r.append(tr);
+
+  var copyBtn = h('button', { class: 'btn', type: 'button', text: 'Copiar feedback' });
+  var again = h('button', { class: 'btn primary', type: 'button', text: 'Nueva entrevista' });
+  var holder = h('div');
+  copyBtn.onclick = function(){
+    var txt = reportText(d) + '\n\nTRANSCRIPCIÓN\n' + transcriptText(msgs);
+    var fallback = function(){
+      holder.replaceChildren();
+      var ta = h('textarea', { rows: '8', readonly: 'readonly' }); ta.value = txt; holder.append(ta); ta.focus(); ta.select();
+    };
+    try {
+      navigator.clipboard.writeText(txt).then(function(){ copyBtn.textContent = 'Copiado'; setTimeout(function(){ copyBtn.textContent = 'Copiar feedback'; }, 1800); }, fallback);
+    } catch (e) { fallback(); }
+  };
+  again.onclick = function(){ leave(); };
+  var dlBtn = h('button', { class: 'btn', type: 'button', text: 'Descargar transcripción (.txt)' });
+  dlBtn.hidden = !downloads;
+  dlBtn.onclick = function(){
+    var stamp = new Date().toISOString().slice(0, 10);
+    downloads.save({ filename: 'entrevista-qa-' + stamp + '.txt', data: reportText(d) + '\n\nTRANSCRIPCIÓN\n' + transcriptText(msgs) })
+      .then(function(){ dlBtn.textContent = 'Guardado'; setTimeout(function(){ dlBtn.textContent = 'Descargar transcripción (.txt)'; }, 1800); })
+      .catch(function(e){ if (e && e.code === 'declined') return; dlBtn.hidden = true; });
+  };
+  r.append(h('div', { class: 'actions' }, again, copyBtn, dlBtn), holder);
+  window.scrollTo(0, 0);
+}
+
+/* ---------- voz ---------- */
+function updateVoiceBtn(){ $('#voiceBtn').textContent = 'Voz: ' + (S.voice ? 'activa' : 'apagada'); }
+
+/* ---------- eventos ---------- */
+$('#bank').addEventListener('input', updateCount);
+['role','profile','style','bank','voice'].forEach(function(id){ $('#' + id).addEventListener('change', saveCfg); });
+$('#bankClear').addEventListener('click', function(){ $('#bank').value = ''; updateCount(); saveCfg(); });
+$('#bankFile').addEventListener('change', function(ev){
+  var f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    var cur = $('#bank').value.trim();
+    var incoming = String(rd.result || '').replace(/\r/g, '').slice(0, 200000);
+    $('#bank').value = (cur === DEFAULT_BANK.trim() || !cur) ? incoming : cur + '\n' + incoming;
+    updateCount(); saveCfg();
+  };
+  rd.readAsText(f);
+  ev.target.value = '';
+});
+$('#code').addEventListener('change', function(){ store('qa-sim-code', this.value.trim()); });
+$('#startBtn').addEventListener('click', startInterview);
+$('#sendBtn').addEventListener('click', send);
+$('#retryBtn').addEventListener('click', function(){ if (!S.busy && S.running) askInterviewer(); });
+$('#answer').addEventListener('input', function(){ if (!this.value.trim()) S.dictPending = false; });
+$('#answer').addEventListener('keydown', function(e){ if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); } });
+$('#finishBtn').addEventListener('click', onFinish);
+$('#leaveBtn').addEventListener('click', leave);
+$('#voiceBtn').addEventListener('click', function(){
+  S.voice = !S.voice; updateVoiceBtn(); if (!S.voice) stopSpeech();
+  var c = readCfg(); c.voice = S.voice; store('qa-sim-cfg', c);
+});
+$('#micBtn').addEventListener('click', function(){
+  if (!dict) return;
+  if (dict.active()){ dict.stop(); return; }
+  stopSpeech();
+  $('#micHint').textContent = '';
+  dict.start({ language: phase() === 'es' ? 'es' : 'en' }).catch(function(e){
+    var code = e && e.code;
+    if (code === 'stopped' || code === 'dismissed') return;
+    $('#micHint').textContent = code === 'not_granted' ? 'El navegador bloqueó el micrófono. Permítelo en el candado de la barra de direcciones o escribe.'
+      : code === 'unavailable' ? 'El dictado no está disponible en este idioma. Puedes escribir.'
+      : 'No se pudo iniciar el dictado. Puedes escribir.';
+  });
+});
+
+/* ---------- arranque ---------- */
+loadCfg();
+renderHistory();
+if ('speechSynthesis' in window){ $('#voiceWrap').hidden = false; $('#voiceBtn').hidden = false; updateVoiceBtn(); }
+
+var API = '/api/chat';
+function apiHeaders(){
+  var hd = { 'content-type': 'application/json' };
+  var c = store('qa-sim-code');
+  if (c) hd['x-access-code'] = c;
+  return hd;
+}
+async function callApi(kind, input, signal){
+  var res;
+  try {
+    res = await fetch(API, { method: 'POST', headers: apiHeaders(), body: JSON.stringify({ kind: kind, messages: input }), signal: signal });
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw { code: 'cancelled' };
+    throw { code: 'upstream_error' };
+  }
+  var data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw { code: (data && data.error) || 'upstream_error' };
+  if (!data || typeof data.text !== 'string' || !data.text.trim()) throw { code: 'empty_completion' };
+  return data.text;
+}
+function parseJson(text){
+  var cands = [text];
+  var fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) cands.push(fence[1]);
+  var a = text.indexOf('{'), b = text.lastIndexOf('}');
+  if (a >= 0 && b > a) cands.push(text.slice(a, b + 1));
+  for (var k = 0; k < cands.length; k++){ try { return JSON.parse(cands[k]); } catch (e) {} }
+  throw { code: 'invalid_json', text: text };
+}
+function makeSample(){
+  var fn = async function(input, opts){
+    opts = opts || {};
+    var text = await callApi('chat', input, opts.signal);
+    if (opts.onText) opts.onText({ text: text, delta: text });
+    return { text: text, truncated: false };
+  };
+  fn.json = async function(input, opts){
+    opts = opts || {};
+    return parseJson(await callApi('eval', input, opts.signal));
+  };
+  return fn;
+}
+function makeDownloads(){
+  return {
+    save: function(o){
+      return new Promise(function(resolve, reject){
+        try {
+          var url = URL.createObjectURL(new Blob([o.data], { type: 'text/plain;charset=utf-8' }));
+          var a = document.createElement('a');
+          a.href = url; a.download = o.filename;
+          document.body.append(a); a.click(); a.remove();
+          setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+          resolve({ status: 'saved' });
+        } catch (e) { reject({ code: 'unavailable' }); }
+      });
+    }
+  };
+}
+function makeDict(){
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  var rec = null, state = 'idle', pH = [], fH = [], sH = [];
+  function setState(st){ state = st; sH.forEach(function(f){ f({ state: st }); }); }
+  function on(list, f){ list.push(f); return function(){ var i = list.indexOf(f); if (i >= 0) list.splice(i, 1); }; }
+  return {
+    active: function(){ return state !== 'idle'; },
+    onPartial: function(f){ return on(pH, f); },
+    onFinal: function(f){ return on(fH, f); },
+    onState: function(f){ return on(sH, f); },
+    start: function(o){
+      return new Promise(function(resolve, reject){
+        if (state !== 'idle'){ resolve(); return; }
+        rec = new SR();
+        rec.lang = (o && o.language === 'en') ? 'en-US' : 'es-CO';
+        rec.continuous = true; rec.interimResults = true;
+        var started = false;
+        rec.onstart = function(){ started = true; setState('listening'); resolve(); };
+        rec.onresult = function(ev){
+          var interim = '';
+          for (var i = ev.resultIndex; i < ev.results.length; i++){
+            var r = ev.results[i];
+            if (r.isFinal){
+              var t = String(r[0].transcript || '').trim();
+              if (t) fH.forEach(function(f){ f({ text: ' ' + t }); });
+            } else interim += r[0].transcript;
+          }
+          pH.forEach(function(f){ f({ text: interim }); });
+        };
+        rec.onerror = function(ev){
+          var code = (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') ? 'not_granted'
+            : ev.error === 'language-not-supported' ? 'unavailable'
+            : (ev.error === 'no-speech' || ev.error === 'aborted') ? null : 'upstream_error';
+          if (code && !started) reject({ code: code });
+        };
+        rec.onend = function(){ setState('idle'); };
+        setState('starting');
+        try { rec.start(); } catch (e) { setState('idle'); reject({ code: 'upstream_error' }); }
+      });
+    },
+    stop: function(){ try { if (rec) rec.stop(); } catch (e) {} return Promise.resolve(); }
+  };
+}
+
+(async function init(){
+  sample = makeSample();
+  downloads = makeDownloads();
+  dict = makeDict();
+  $('#code').value = store('qa-sim-code') || '';
+  if (dict){
+    $('#micBtn').hidden = false;
+    dict.onPartial(function(e){ $('#partial').textContent = e.text || ''; });
+    dict.onFinal(function(e){
+      var ta = $('#answer');
+      ta.value = ta.value ? ta.value + e.text : String(e.text || '').replace(/^\s+/, '');
+      S.dictPending = true;
+      $('#partial').textContent = '';
+    });
+    dict.onState(function(e){
+      var on = e.state === 'listening' || e.state === 'starting';
+      $('#micBtn').textContent = on ? 'Detener dictado' : 'Dictar';
+      $('#micBtn').classList.toggle('on', e.state === 'listening');
+      if (e.state === 'idle') $('#partial').textContent = '';
+    });
+  } else {
+    $('#micHint').textContent = 'El dictado por voz funciona en Chrome y Edge. En este navegador puedes escribir.';
+  }
+  try {
+    var r = await fetch(API);
+    var info = await r.json();
+    if (!r.ok) throw new Error('bad');
+    $('#conn').textContent = 'Entrevistador listo';
+    $('#startBtn').disabled = false;
+    if (info && info.needsCode) $('#codeWrap').hidden = false;
+  } catch (e) {
+    $('#conn').textContent = 'Sin conexión con el servidor';
+    $('#startNote').textContent = 'No se pudo conectar con el servidor del entrevistador. Recarga la página en unos minutos.';
+  }
+})();
+
+})();
+</script>
+</body>
+</html>
