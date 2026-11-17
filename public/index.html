@@ -38,7 +38,8 @@ body{
   padding-left:max(16px,env(safe-area-inset-left,0px));
   padding-right:max(16px,env(safe-area-inset-right,0px));
 }
-.app{max-width:1040px; margin:0 auto; display:grid; gap:22px}
+.app{max-width:1040px; margin:0 auto; display:grid; grid-template-columns:minmax(0,1fr); gap:22px}
+.app > *, main, main > section, .prog > *, .report > *{min-width:0}
 h1{font-size:clamp(1.5rem,1.1rem + 1.6vw,2.1rem); line-height:1.15; margin:0; font-weight:600; letter-spacing:-.01em; text-wrap:balance}
 h2{font-size:1.05rem; margin:0 0 10px; font-weight:600; text-wrap:balance}
 p{margin:0}
@@ -155,6 +156,40 @@ details.ans .in{display:grid; gap:8px; padding-top:8px; font-size:.92rem}
   .verdict{grid-template-columns:minmax(0,1fr)}
   .verdict .score{text-align:left}
 }
+
+/* progreso */
+.toplinks{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center}
+.prog{display:grid; grid-template-columns:minmax(0,1fr); gap:28px}
+.prog-head{display:flex; flex-wrap:wrap; gap:10px 16px; align-items:flex-end; justify-content:space-between}
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); border-top:1px solid var(--line); border-bottom:1px solid var(--line)}
+.stat{padding:12px 14px 12px 0; display:grid; gap:2px; min-width:0}
+.stat .v{font:600 1.5rem var(--mono); font-variant-numeric:tabular-nums}
+.stat .k{font:500 .7rem var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.trend{font-size:.95rem}
+.chartwrap{overflow-x:auto; border:1px solid var(--line); border-radius:8px; background:var(--surface)}
+.chartwrap svg{display:block; width:100%; min-width:460px; height:auto}
+svg .grid{stroke:var(--line); stroke-width:1}
+svg .thr{stroke:var(--pass); stroke-width:1.2; stroke-dasharray:5 4}
+svg .ln{stroke:var(--accent); stroke-width:2; fill:none; stroke-linejoin:round; stroke-linecap:round}
+svg .txt{fill:var(--muted); font:400 12px var(--mono)}
+svg .txt-thr{fill:var(--pass); font:600 12px var(--mono)}
+svg .pt-pass{fill:var(--pass)}
+svg .pt-fail{fill:var(--surface); stroke:var(--fail); stroke-width:2.5}
+svg .val{fill:var(--ink); font:600 12px var(--mono)}
+.tblwrap{overflow-x:auto}
+.tbl{width:100%; border-collapse:collapse; font-size:.9rem}
+.tbl th{font:500 .7rem var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); text-align:left; padding:8px 12px 8px 0; border-bottom:1px solid var(--line); white-space:nowrap}
+.tbl td{padding:9px 12px 9px 0; border-bottom:1px solid var(--line); vertical-align:middle}
+.tbl .num{font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+.up{color:var(--pass)} .down{color:var(--fail)} .flat{color:var(--muted)}
+.att{list-style:none; margin:0; padding:0}
+.att li{display:flex; flex-wrap:wrap; gap:6px 14px; align-items:center; padding:10px 0; border-top:1px solid var(--line)}
+.att li:last-child{border-bottom:1px solid var(--line)}
+.att .when{flex:1 1 170px; min-width:0}
+.att .sc{font:600 1rem var(--mono); font-variant-numeric:tabular-nums}
+.att .btn{min-height:34px; padding:5px 11px; font-size:.84rem}
+.tag{font:500 .68rem var(--mono); letter-spacing:.05em; text-transform:uppercase; padding:3px 7px; border:1px solid var(--line); border-radius:4px; color:var(--muted)}
+.focus{display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr)); gap:24px}
 </style>
 </head>
 <body>
@@ -165,7 +200,10 @@ details.ans .in{display:grid; gap:8px; padding-top:8px; font-size:.92rem}
       <p class="eyebrow">Sala de práctica · 10 min · 2 min ES, luego EN</p>
       <h1>Simulador de entrevistas QA</h1>
     </div>
-    <p class="status" id="conn">Conectando…</p>
+    <div class="toplinks">
+      <p class="status" id="conn">Conectando…</p>
+      <button class="btn" id="progBtn" type="button">Mi progreso</button>
+    </div>
   </header>
 
   <main>
@@ -193,9 +231,10 @@ details.ans .in{display:grid; gap:8px; padding-top:8px; font-size:.92rem}
           <input type="checkbox" id="voice"> Leer al entrevistador en voz alta
         </label>
         <div id="histBox" hidden>
-          <h2>Intentos anteriores</h2>
+          <h2>Últimos intentos</h2>
           <ul class="hist" id="hist"></ul>
-          <p class="hint" style="margin-top:6px">Cada intento guarda tu transcripción y su calificación solo en este navegador.</p>
+          <div class="rowbtn" style="margin-top:10px"><button class="btn ghost" id="histAll" type="button">Ver todo mi progreso</button></div>
+          <p class="hint" style="margin-top:6px">Cada intento guarda su calificación y transcripción solo en este navegador.</p>
         </div>
       </div>
 
@@ -255,6 +294,10 @@ details.ans .in{display:grid; gap:8px; padding-top:8px; font-size:.92rem}
     </section>
 
     <!-- RESULTADO -->
+    <section id="v-progress" hidden aria-label="Mi progreso">
+      <div class="prog" id="prog"></div>
+    </section>
+
     <section id="v-result" hidden aria-label="Resultado">
       <div class="report" id="report"></div>
     </section>
@@ -345,8 +388,13 @@ function phase(){ return S.elapsed < SWITCH ? 'es' : 'en'; }
 
 /* ---------- vistas ---------- */
 function showView(name){
-  ['setup','room','result'].forEach(function(v){ $('#v-' + v).hidden = (v !== name); });
+  ['setup','room','result','progress'].forEach(function(v){ $('#v-' + v).hidden = (v !== name); });
+  syncProg();
   window.scrollTo(0, 0);
+}
+function syncProg(){
+  var inProgress = !$('#v-progress').hidden;
+  $('#progBtn').hidden = !!(S.running || S.evaluating || inProgress);
 }
 
 /* ---------- configuración ---------- */
@@ -374,36 +422,265 @@ function updateCount(){
   var n = parseBank($('#bank').value).length;
   $('#bankCount').textContent = n + (n === 1 ? ' pregunta' : ' preguntas');
 }
+var HKEY = 'qa-sim-hist';
+function loadHist(){ var a = store(HKEY); return Array.isArray(a) ? a : []; }
+function normalizeEntry(it){
+  if (!it.crit && it.report && Array.isArray(it.report.criteria)){
+    it.crit = {};
+    it.report.criteria.forEach(function(c){ if (c && c.name) it.crit[String(c.name)] = clamp(Math.round(Number(c.score) || 0), 0, 10); });
+  }
+  if (!it.imp && it.report && Array.isArray(it.report.improvements)) it.imp = it.report.improvements.slice(0, 5);
+  if (!it.nxt && it.report && Array.isArray(it.report.next_steps)) it.nxt = it.report.next_steps.slice(0, 3);
+  if (it.answered === undefined && Array.isArray(it.messages)) it.answered = it.messages.filter(function(m){ return m.role === 'user'; }).length;
+  return it;
+}
+function writeHist(items){
+  items = items.slice(-100).map(normalizeEntry);
+  for (var keep = 15; keep >= 0; keep -= 5){
+    var out = items.map(function(it, i){
+      var c = Object.assign({}, it);
+      if (i < items.length - keep){ delete c.messages; delete c.report; }
+      return c;
+    });
+    try { localStorage.setItem(HKEY, JSON.stringify(out)); return true; } catch (e) {}
+  }
+  return false;
+}
+function dateLabel(at, long){
+  var d = new Date(at);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('es-CO', long ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' });
+}
 function renderHistory(){
-  var items = store('qa-sim-hist') || [];
+  var items = loadHist();
   var box = $('#histBox'), ul = $('#hist');
   ul.replaceChildren();
   box.hidden = !items.length;
-  items.slice().reverse().slice(0, 8).forEach(function(it){
-    var d = new Date(it.at);
-    var date = isNaN(d) ? '' : d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+  items.slice().reverse().slice(0, 3).forEach(function(it){
     var view = null;
     if (it.report){
       view = h('button', { class: 'btn ghost', type: 'button', text: 'Ver revisión' });
-      view.onclick = function(){ openSaved(it); };
+      view.onclick = function(){ openSaved(it, 'setup'); };
     }
     ul.append(h('li', null,
-      h('span', { class: 'mono', text: date + ' · ' + it.score + '/100' }),
+      h('span', { class: 'mono', text: dateLabel(it.at) + ' · ' + it.score + '/100' }),
       h('span', { class: it.approved ? 'tagpass' : 'tagfail', text: it.approved ? 'Aprobado' : 'No aprobado' }),
       view
     ));
   });
 }
-function openSaved(it){
+function openSaved(it, backTo){
   S.running = false; clearInterval(S.timer);
   showView('result');
-  renderReport(it.report, Array.isArray(it.messages) ? it.messages : []);
+  renderReport(it.report, Array.isArray(it.messages) ? it.messages : [], backTo || 'setup');
 }
 function saveHistory(d){
-  var items = store('qa-sim-hist') || [];
-  items.push({ at: Date.now(), score: clamp(Math.round(Number(d.score) || 0), 0, 100), approved: d.approved === true, messages: S.messages, report: d });
-  store('qa-sim-hist', items.slice(-10));
+  var items = loadHist();
+  var msgs = S.messages.slice();
+  var users = msgs.filter(function(m){ return m.role === 'user'; });
+  items.push({
+    at: Date.now(),
+    score: clamp(Math.round(Number(d.score) || 0), 0, 100),
+    approved: d.approved === true,
+    answered: users.length,
+    voice: users.filter(function(m){ return m.voice; }).length,
+    messages: msgs, report: d
+  });
+  var ok = writeHist(items);
   renderHistory();
+  return ok;
+}
+
+/* ---------- progreso ---------- */
+function svgEl(tag, attrs, text){
+  var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  Object.keys(attrs || {}).forEach(function(k){ e.setAttribute(k, attrs[k]); });
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function chartFor(items){
+  var data = items.slice(-20), n = data.length;
+  var W = 600, H = 250, L = 36, R = 18, T = 18, B = 34;
+  var iw = W - L - R, ih = H - T - B;
+  function X(i){ return n === 1 ? L + iw / 2 : L + i * iw / (n - 1); }
+  function Y(v){ return T + (100 - v) / 100 * ih; }
+  var svg = svgEl('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img',
+    'aria-label': 'Evolución de tu nota en los últimos ' + n + ' intentos: de ' + data[0].score + ' a ' + data[n - 1].score + ' sobre 100.' });
+  [0, 25, 50, 100].forEach(function(v){
+    svg.append(svgEl('line', { class: 'grid', x1: L, x2: W - R, y1: Y(v), y2: Y(v) }));
+    svg.append(svgEl('text', { class: 'txt', x: L - 6, y: Y(v) + 4, 'text-anchor': 'end' }, String(v)));
+  });
+  svg.append(svgEl('line', { class: 'thr', x1: L, x2: W - R, y1: Y(70), y2: Y(70) }));
+  svg.append(svgEl('text', { class: 'txt-thr', x: L - 6, y: Y(70) + 4, 'text-anchor': 'end' }, '70'));
+  var step = Math.max(1, Math.ceil(n / 6)), shown = {};
+  for (var k = n - 1; k >= 0; k -= step) shown[k] = true;
+  data.forEach(function(it, i){
+    if (shown[i]) svg.append(svgEl('text', { class: 'txt', x: X(i), y: H - 12, 'text-anchor': n === 1 ? 'middle' : i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle' }, dateLabel(it.at)));
+  });
+  if (n > 1){
+    svg.append(svgEl('polyline', { class: 'ln', points: data.map(function(it, i){ return X(i) + ',' + Y(it.score); }).join(' ') }));
+  }
+  data.forEach(function(it, i){
+    var last = i === n - 1;
+    var c = svgEl('circle', { class: it.approved ? 'pt-pass' : 'pt-fail', cx: X(i), cy: Y(it.score), r: last ? 6 : 4.5 });
+    c.append(svgEl('title', {}, dateLabel(it.at, true) + ' · ' + it.score + '/100 · ' + (it.approved ? 'Aprobado' : 'No aprobado')));
+    svg.append(c);
+    if (n <= 10 || last){
+      var y = Y(it.score);
+      svg.append(svgEl('text', { class: 'val', x: X(i), y: y < T + 16 ? y + 20 : y - 11, 'text-anchor': 'middle' }, String(it.score)));
+    }
+  });
+  return svg;
+}
+function critNames(items){
+  var names = [];
+  items.forEach(function(it){ Object.keys(it.crit || {}).forEach(function(k){ if (names.indexOf(k) < 0) names.push(k); }); });
+  return names;
+}
+function changeCell(delta){
+  if (delta === null) return h('td', { class: 'num flat', text: '—' });
+  if (delta > 0) return h('td', { class: 'num up', text: '▲ +' + delta });
+  if (delta < 0) return h('td', { class: 'num down', text: '▼ ' + String(delta).replace('-', '−') });
+  return h('td', { class: 'num flat', text: '= 0' });
+}
+function csvCell(v){
+  v = String(v === undefined || v === null ? '' : v);
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+}
+function progressCsv(items){
+  var names = critNames(items);
+  var rows = [['fecha', 'nota', 'aprobado', 'respuestas'].concat(names)];
+  items.forEach(function(it){
+    var d = new Date(it.at);
+    rows.push([isNaN(d) ? '' : d.toISOString().slice(0, 16).replace('T', ' '), it.score, it.approved ? 'si' : 'no', it.answered === undefined ? '' : it.answered]
+      .concat(names.map(function(nm){ return it.crit && it.crit[nm] !== undefined ? it.crit[nm] : ''; })));
+  });
+  return '﻿' + rows.map(function(r){ return r.map(csvCell).join(','); }).join('\n');
+}
+function twoStep(btn, label, confirmLabel, action){
+  var timer = null;
+  btn.onclick = function(){
+    if (timer){ clearTimeout(timer); timer = null; action(); return; }
+    btn.textContent = confirmLabel; btn.classList.add('danger');
+    timer = setTimeout(function(){ timer = null; btn.textContent = label; btn.classList.remove('danger'); }, 3500);
+  };
+}
+function renderProgress(){
+  var box = $('#prog'); box.replaceChildren();
+  var items = loadHist().map(normalizeEntry);
+  var back = h('button', { class: 'btn ghost', type: 'button', text: 'Volver' });
+  back.onclick = function(){ showView('setup'); renderHistory(); };
+  box.append(h('div', { class: 'prog-head' },
+    h('div', null, h('p', { class: 'eyebrow', text: 'Seguimiento' }), h('h1', { text: 'Mi progreso' })), back));
+
+  if (!items.length){
+    var go = h('button', { class: 'btn primary', type: 'button', text: 'Hacer mi primera entrevista' });
+    go.onclick = function(){ showView('setup'); renderHistory(); };
+    box.append(h('div', null, h('p', { class: 'muted', text: 'Todavía no tienes entrevistas calificadas. Completa una y aquí verás cómo evolucionan tu nota y cada criterio.' }), h('div', { class: 'rowbtn', style: 'margin-top:12px' }, go)));
+    return;
+  }
+
+  var scores = items.map(function(x){ return x.score; });
+  var sum = function(a){ return a.reduce(function(t, v){ return t + v; }, 0); };
+  var last3 = scores.slice(-3);
+  var passN = items.filter(function(x){ return x.approved; }).length;
+  function stat(k, v){ return h('div', { class: 'stat' }, h('div', { class: 'v', text: String(v) }), h('div', { class: 'k', text: k })); }
+  box.append(h('div', { class: 'stats' },
+    stat('Intentos', items.length),
+    stat('Mejor nota', Math.max.apply(null, scores) + '/100'),
+    stat('Promedio últimos ' + last3.length, Math.round(sum(last3) / last3.length) + '/100'),
+    stat('Aprobados', passN + ' de ' + items.length)
+  ));
+  if (items.length > 1){
+    var delta = scores[scores.length - 1] - scores[0];
+    box.append(h('p', { class: 'trend', text: delta > 0 ? 'Subiste ' + delta + ' puntos desde tu primer intento.'
+      : delta < 0 ? 'Bajaste ' + Math.abs(delta) + ' puntos desde tu primer intento.' : 'Tu nota actual es igual a la del primer intento.' }));
+  }
+
+  box.append(h('div', null,
+    h('h2', { text: 'Evolución de tu nota' }),
+    h('div', { class: 'chartwrap', id: 'chartwrap' }, chartFor(items)),
+    h('p', { class: 'hint', style: 'margin-top:6px', text: 'Punto lleno: aprobado. Punto con borde: no aprobado. La línea punteada verde marca la nota de aprobación (70). Se muestran hasta los últimos 20 intentos; en pantallas pequeñas desliza el gráfico para ver los anteriores.' })
+  ));
+
+  var names = critNames(items);
+  if (names.length){
+    var tb = h('tbody');
+    names.forEach(function(nm){
+      var vals = items.filter(function(it){ return it.crit && it.crit[nm] !== undefined; }).map(function(it){ return it.crit[nm]; });
+      var first = vals[0], last = vals[vals.length - 1];
+      tb.append(h('tr', null,
+        h('td', { text: nm }),
+        h('td', { class: 'num', text: first + '/10' }),
+        h('td', { class: 'num', text: last + '/10' }),
+        changeCell(vals.length > 1 ? last - first : null)
+      ));
+    });
+    box.append(h('div', null, h('h2', { text: 'Evolución por criterio' }),
+      h('div', { class: 'tblwrap' }, h('table', { class: 'tbl' },
+        h('thead', null, h('tr', null, h('th', { text: 'Criterio' }), h('th', { text: 'Primero' }), h('th', { text: 'Último' }), h('th', { text: 'Cambio' }))), tb))));
+  }
+
+  var latest = items[items.length - 1];
+  if ((latest.imp && latest.imp.length) || (latest.nxt && latest.nxt.length)){
+    box.append(h('div', null, h('h2', { text: 'Para tu próximo intento (según el último)' }),
+      h('div', { class: 'focus' },
+        h('div', null, h('div', { class: 'lbl', text: 'Para mejorar' }), list(latest.imp)),
+        h('div', null, h('div', { class: 'lbl', text: 'Próximos pasos' }), list(latest.nxt)))));
+  }
+
+  var ul = h('ul', { class: 'att' });
+  items.slice().reverse().forEach(function(it, ri){
+    var idx = items.length - 1 - ri;
+    var prev = idx > 0 ? items[idx - 1] : null;
+    var d = prev ? it.score - prev.score : null;
+    var when = new Date(it.at);
+    var whenTxt = isNaN(when) ? '' : when.toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    var row = h('li', null,
+      h('span', { class: 'when', text: whenTxt }),
+      h('span', { class: 'sc', text: it.score + '/100' }),
+      d === null ? h('span', { class: 'flat mono small', text: '—' })
+        : h('span', { class: (d > 0 ? 'up' : d < 0 ? 'down' : 'flat') + ' mono small', text: d > 0 ? '▲ +' + d : d < 0 ? '▼ ' + String(d).replace('-', '−') : '= 0' }),
+      h('span', { class: it.approved ? 'tagpass' : 'tagfail', text: it.approved ? 'Aprobado' : 'No aprobado' }),
+      (it.answered !== undefined && it.answered < 3) ? h('span', { class: 'tag', text: 'pocas respuestas' }) : null
+    );
+    if (it.report){
+      var vb = h('button', { class: 'btn', type: 'button', text: 'Ver revisión' });
+      vb.onclick = function(){ openSaved(it, 'progress'); };
+      row.append(vb);
+    }
+    var del = h('button', { class: 'btn ghost', type: 'button', text: 'Eliminar' });
+    twoStep(del, 'Eliminar', 'Confirmar', function(){
+      writeHist(loadHist().filter(function(x){ return x.at !== it.at; }));
+      renderProgress(); renderHistory();
+    });
+    row.append(del);
+    ul.append(row);
+  });
+  box.append(h('div', null, h('h2', { text: 'Todos tus intentos' }), ul,
+    h('p', { class: 'hint', style: 'margin-top:8px', text: 'Los intentos se guardan solo en este navegador. Las transcripciones completas se conservan para los 15 más recientes; de los anteriores queda la nota y los criterios.' })));
+
+  var cw = $('#chartwrap'); if (cw) cw.scrollLeft = cw.scrollWidth;
+  var actions = h('div', { class: 'actions' });
+  var again = h('button', { class: 'btn primary', type: 'button', text: 'Nueva entrevista' });
+  again.onclick = function(){ showView('setup'); renderHistory(); };
+  actions.append(again);
+  if (downloads){
+    var csv = h('button', { class: 'btn', type: 'button', text: 'Exportar historial (.csv)' });
+    csv.onclick = function(){
+      downloads.save({ filename: 'progreso-entrevistas-qa.csv', data: progressCsv(items) })
+        .then(function(){ csv.textContent = 'Guardado'; setTimeout(function(){ csv.textContent = 'Exportar historial (.csv)'; }, 1800); })
+        .catch(function(e){ if (e && e.code === 'declined') return; csv.hidden = true; });
+    };
+    actions.append(csv);
+  }
+  var wipe = h('button', { class: 'btn ghost', type: 'button', text: 'Borrar todo el historial' });
+  twoStep(wipe, 'Borrar todo el historial', 'Confirmar: borrar todo', function(){
+    try { localStorage.removeItem(HKEY); } catch (e) {}
+    renderProgress(); renderHistory();
+  });
+  actions.append(wipe);
+  box.append(actions);
 }
 
 /* ---------- prompts ---------- */
@@ -672,7 +949,7 @@ async function evaluate(){
     if (e && e.code === 'cancelled') return;
     renderEvalError(e);
   } finally {
-    S.evaluating = false;
+    S.evaluating = false; syncProg();
   }
 }
 function list(items, cls){
@@ -700,7 +977,7 @@ function reportText(d){
   L.push('', 'PRÓXIMOS PASOS'); (d.next_steps || []).forEach(function(x){ L.push('- ' + x); });
   return L.join('\n');
 }
-function renderReport(d, msgs){
+function renderReport(d, msgs, backTo){
   msgs = msgs || S.messages;
   var r = $('#report'); r.replaceChildren();
   var score = clamp(Math.round(Number(d.score) || 0), 0, 100);
@@ -712,6 +989,14 @@ function renderReport(d, msgs){
     h('div', { class: 'score' }, String(score), h('small', { text: ' / 100' })),
     d.headline ? h('p', { class: 'headline', text: String(d.headline) }) : null
   ));
+
+  if (!backTo){
+    var hp = loadHist();
+    if (hp.length){
+      var pv = hp[hp.length - 1], df = score - pv.score;
+      r.append(h('p', { class: 'muted small', text: 'Intento anterior: ' + pv.score + '/100 (' + (df > 0 ? '+' : df < 0 ? '−' : '') + Math.abs(df) + ' puntos).' }));
+    }
+  }
 
   var crit = Array.isArray(d.criteria) ? d.criteria : [];
   if (crit.length){
@@ -811,7 +1096,18 @@ function renderReport(d, msgs){
       .then(function(){ dlBtn.textContent = 'Guardado'; setTimeout(function(){ dlBtn.textContent = 'Descargar transcripción (.txt)'; }, 1800); })
       .catch(function(e){ if (e && e.code === 'declined') return; dlBtn.hidden = true; });
   };
-  r.append(h('div', { class: 'actions' }, again, copyBtn, dlBtn), holder);
+  var backBtn = null, progBtn2 = null;
+  if (backTo === 'progress'){
+    backBtn = h('button', { class: 'btn', type: 'button', text: 'Volver a mi progreso' });
+    backBtn.onclick = function(){ showView('progress'); renderProgress(); };
+  } else if (backTo === 'setup'){
+    backBtn = h('button', { class: 'btn', type: 'button', text: 'Volver' });
+    backBtn.onclick = function(){ leave(); };
+  } else {
+    progBtn2 = h('button', { class: 'btn', type: 'button', text: 'Ver mi progreso' });
+    progBtn2.onclick = function(){ showView('progress'); renderProgress(); };
+  }
+  r.append(h('div', { class: 'actions' }, backBtn, again, progBtn2, copyBtn, dlBtn), holder);
   window.scrollTo(0, 0);
 }
 
@@ -860,6 +1156,9 @@ $('#micBtn').addEventListener('click', function(){
       : 'No se pudo iniciar el dictado. Puedes escribir.';
   });
 });
+
+$('#progBtn').addEventListener('click', function(){ if (S.running || S.evaluating) return; showView('progress'); renderProgress(); });
+$('#histAll').addEventListener('click', function(){ showView('progress'); renderProgress(); });
 
 /* ---------- arranque ---------- */
 loadCfg();

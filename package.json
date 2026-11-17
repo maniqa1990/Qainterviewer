@@ -1,0 +1,7 @@
+{
+  "name": "simulador-entrevistas-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simulador de entrevistas de QA (10 min: 2 min en español, el resto en inglés) con calificación y feedback.",
+  "engines": { "node": ">=18" }
+}
