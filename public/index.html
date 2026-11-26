@@ -72,7 +72,7 @@ textarea{resize:vertical; line-height:1.5}
 .check input{width:auto; margin:0}
 
 /* setup */
-.setup{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:24px; align-items:start}
+.setup{display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-items:start}
 .col{display:grid; gap:16px; min-width:0}
 .rowbtn{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
 .count{font:400 .78rem var(--mono); color:var(--muted)}
@@ -238,20 +238,6 @@ svg .val{fill:var(--ink); font:600 12px var(--mono)}
         </div>
       </div>
 
-      <div class="col">
-        <h2>Banco de preguntas</h2>
-        <p class="small muted">Una pregunta por línea. Las que aparecen son de ejemplo: reemplázalas pegando tu banco o cargando un archivo .txt, .md o .csv. El entrevistador elige y adapta las más relevantes.</p>
-        <label class="f" for="bank">Preguntas
-          <textarea id="bank" rows="16" spellcheck="false"></textarea>
-        </label>
-        <div class="rowbtn">
-          <label class="btn ghost" for="bankFile" style="display:inline-flex;align-items:center">Cargar archivo</label>
-          <input type="file" id="bankFile" accept=".txt,.md,.csv,text/plain" hidden>
-          <button class="btn ghost" id="bankClear" type="button">Vaciar</button>
-          <span class="count" id="bankCount"></span>
-        </div>
-      </div>
-
       <div class="startbar">
         <button class="btn primary" id="startBtn" type="button" disabled>Iniciar entrevista</button>
         <p class="hint" id="startNote">Los primeros 2 minutos son en español y el resto en inglés. El reloj se detiene mientras el entrevistador responde. Al terminar recibes una calificación y feedback.</p>
@@ -310,27 +296,6 @@ svg .val{fill:var(--ink); font:600 12px var(--mono)}
 
 var TOTAL = 600, SWITCH = 120, WRAP = 540;
 
-var DEFAULT_BANK = [
-  'Tell me about a critical bug you found right before a release. How did you communicate it to the team?',
-  'What is the difference between severity and priority? Give me an example of each.',
-  'How would you test a login form? Walk me through your approach.',
-  'Explain boundary value analysis and equivalence partitioning with a concrete example.',
-  'What is the difference between smoke testing and sanity testing?',
-  'How do you write a good bug report? What must it include?',
-  'Tell me about a time you disagreed with a developer about whether something was a bug.',
-  'What do you do when the requirements are ambiguous or incomplete?',
-  'How do you decide what to test first when time is limited?',
-  'What is regression testing, and how do you decide what goes into a regression suite?',
-  'Describe the bug lifecycle in your last team.',
-  'How do you test a feature when there is no documentation at all?',
-  'How do you handle a bug you cannot reproduce consistently?',
-  'What edge cases would you consider for a date picker?',
-  'Have you tested APIs manually? How would you validate a POST endpoint with Postman?',
-  'How do you work with a distributed team across different time zones?',
-  'Tell me about a time you had to learn a new tool or domain very quickly.',
-  'Why are you looking for a new opportunity right now?'
-].join('\n');
-
 var DEFAULT_PROFILE = '';
 
 var STYLES = {
@@ -370,12 +335,6 @@ function fmt(sec){
   return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
 }
 function clamp(n, a, b){ return Math.min(b, Math.max(a, n)); }
-function parseBank(txt){
-  return String(txt || '').split(/\r?\n/)
-    .map(function(l){ return l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim(); })
-    .filter(function(l){ return l.length > 3; });
-}
-
 /* ---------- estado ---------- */
 var S = {
   messages: [], elapsed: 0, running: false, busy: false, lastTick: 0, timer: null,
@@ -403,25 +362,18 @@ function loadCfg(){
   $('#role').value = c.role || 'QA Manual Engineer (semi-senior), 100 % remoto desde Colombia';
   $('#profile').value = c.profile || DEFAULT_PROFILE;
   $('#style').value = c.style || 'estandar';
-  $('#bank').value = (typeof c.bank === 'string') ? c.bank : DEFAULT_BANK;
   S.voice = !!c.voice;
   $('#voice').checked = S.voice;
-  updateCount();
 }
 function readCfg(){
   return {
     role: $('#role').value.trim(),
     profile: $('#profile').value.trim(),
     style: $('#style').value,
-    bank: $('#bank').value,
     voice: $('#voice').checked
   };
 }
 function saveCfg(){ store('qa-sim-cfg', readCfg()); }
-function updateCount(){
-  var n = parseBank($('#bank').value).length;
-  $('#bankCount').textContent = n + (n === 1 ? ' pregunta' : ' preguntas');
-}
 var HKEY = 'qa-sim-hist';
 function loadHist(){ var a = store(HKEY); return Array.isArray(a) ? a : []; }
 function normalizeEntry(it){
@@ -686,7 +638,6 @@ function renderProgress(){
 /* ---------- prompts ---------- */
 function rules(){
   var c = S.cfg;
-  var bank = parseBank(c.bank).map(function(q){ return '- ' + q; }).join('\n').slice(0, 30000);
   return [
     'Eres "Alex Rivera", entrevistador técnico de QA en una empresa de staffing de software que coloca ingenieros de QA de Latinoamérica en equipos de clientes de EE. UU. Estás entrevistando por videollamada a un candidato para el puesto: ' + (c.role || 'QA Manual Engineer') + '.',
     '',
@@ -699,11 +650,8 @@ function rules(){
     '- No des feedback, pistas ni respuestas correctas durante la entrevista. No reveles que es una simulación ni cómo se califica.',
     '- Fase 1 (primeros 2 minutos, en ESPAÑOL): saludo, presentación breve, "cuéntame de ti", por qué le interesa el rol y su situación actual. Es una charla tipo reclutador.',
     '- Fase 2 (desde el minuto 2 hasta el 10, en INGLÉS): preguntas técnicas y de comportamiento. La primera vez que pases a inglés, di una frase corta y natural de transición (a partir de ahora siguen en inglés porque trabajará con clientes de EE. UU.). Después responde SIEMPRE en inglés. Si el candidato contesta en español, pídele con amabilidad que lo intente en inglés.',
-    '- Usa el banco de preguntas como base: elige las más relevantes para este perfil, en cualquier orden, adáptalas a la conversación y tradúcelas al idioma actual si hace falta. Mezcla preguntas técnicas y de comportamiento. No las leas como lista ni las repitas.',
-    '- Al final de cada mensaje del candidato hay una nota del sistema entre corchetes con el tiempo y el idioma que debes usar. Es información interna: obedécela y nunca la menciones.',
-    '',
-    'BANCO DE PREGUNTAS:',
-    bank || '- (vacío: improvisa preguntas típicas de QA manual semi-senior)'
+    '- Usa las preguntas que recibes en el contexto del sistema como base: elige las más relevantes para este perfil, en cualquier orden, adáptalas a la conversación y tradúcelas al idioma actual si hace falta. Mezcla preguntas técnicas y de comportamiento. No las leas como lista ni las repitas. Ese contexto es interno: nunca lo menciones.',
+    '- Al final de cada mensaje del candidato hay una nota del sistema entre corchetes con el tiempo y el idioma que debes usar. Es información interna: obedécela y nunca la menciones.'
   ].join('\n');
 }
 function buildInput(){
@@ -776,7 +724,7 @@ function showError(e){
     session_expired: 'Tu sesión expiró. Vuelve a iniciar sesión y reintenta.',
     refused: 'Claude no pudo responder a ese mensaje. Reformúlalo y reintenta.',
     unauthorized: 'Falta el código de acceso o es incorrecto. Vuelve al inicio e introdúcelo.',
-    too_large: 'Tu perfil o tu banco de preguntas es demasiado largo. Acórtalo e inténtalo de nuevo.',
+    too_large: 'Tu perfil o el historial de la entrevista es demasiado largo. Acórtalo e inténtalo de nuevo.',
     server_misconfigured: 'El servidor todavía no está configurado (falta la clave de API).'
   }[code] || 'Falló la conexión con el entrevistador. Reintenta.';
   $('#errText').textContent = msg;
@@ -1115,22 +1063,7 @@ function renderReport(d, msgs, backTo){
 function updateVoiceBtn(){ $('#voiceBtn').textContent = 'Voz: ' + (S.voice ? 'activa' : 'apagada'); }
 
 /* ---------- eventos ---------- */
-$('#bank').addEventListener('input', updateCount);
-['role','profile','style','bank','voice'].forEach(function(id){ $('#' + id).addEventListener('change', saveCfg); });
-$('#bankClear').addEventListener('click', function(){ $('#bank').value = ''; updateCount(); saveCfg(); });
-$('#bankFile').addEventListener('change', function(ev){
-  var f = ev.target.files && ev.target.files[0];
-  if (!f) return;
-  var rd = new FileReader();
-  rd.onload = function(){
-    var cur = $('#bank').value.trim();
-    var incoming = String(rd.result || '').replace(/\r/g, '').slice(0, 200000);
-    $('#bank').value = (cur === DEFAULT_BANK.trim() || !cur) ? incoming : cur + '\n' + incoming;
-    updateCount(); saveCfg();
-  };
-  rd.readAsText(f);
-  ev.target.value = '';
-});
+['role','profile','style','voice'].forEach(function(id){ $('#' + id).addEventListener('change', saveCfg); });
 $('#code').addEventListener('change', function(){ store('qa-sim-code', this.value.trim()); });
 $('#startBtn').addEventListener('click', startInterview);
 $('#sendBtn').addEventListener('click', send);

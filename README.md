@@ -5,7 +5,7 @@ Práctica de entrevistas de QA de 10 minutos: los primeros 2 en español y el re
 ## Cómo está armado
 
 - `public/index.html`: la página (sin dependencias).
-- `api/chat.js`: función de servidor que recibe los mensajes de la página, los envía a la API de Anthropic y devuelve la respuesta. Tu clave de API vive solo aquí, en una variable de entorno.
+- `api/chat.js`: función de servidor que recibe los mensajes de la página, los envía a la API de Anthropic y devuelve la respuesta. Tu clave de API y el banco de preguntas viven solo aquí; las preguntas se inyectan como contexto del sistema y no se muestran en la interfaz.
 - `vercel.json`: permite que la calificación tarde hasta 60 segundos.
 
 ## Publicarlo en Vercel (con GitHub)
@@ -51,7 +51,7 @@ Si un nombre de modelo deja de existir, el simulador muestra "El servidor todav�
 
 ## Privacidad
 
-El servidor no guarda nada: reenvía cada mensaje a Anthropic y devuelve la respuesta. Lo que cada persona escribe (perfil, respuestas, banco de preguntas) viaja a través de tu proyecto de Vercel hasta la API de Anthropic. Las transcripciones y los intentos anteriores se guardan solo en el navegador de cada persona.
+El servidor no guarda nada: reenvía cada mensaje a Anthropic y devuelve la respuesta. Lo que cada persona escribe (perfil y respuestas) viaja a través de tu proyecto de Vercel hasta la API de Anthropic. El banco de preguntas vive en `api/chat.js` y solo viaja entre el servidor y Anthropic; no aparece en la interfaz. Las transcripciones y los intentos anteriores se guardan solo en el navegador de cada persona.
 
 ## Notas de uso
 
