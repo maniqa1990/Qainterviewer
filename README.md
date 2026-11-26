@@ -44,7 +44,7 @@ Para probar en local, crea un `.env.local` con `GEMINI_API_KEY=...` y `ACCESS_CO
 | `RATE_LIMIT_PER_HOUR` | Llamadas por persona por hora | `60` |
 | `DAILY_CALL_CAP` | Llamadas totales por día | `200` |
 
-Ambos modelos por defecto tienen **plan Free** en la API de Gemini. Si un modelo deja de estar disponible, cambia los nombres en `MODEL_CHAT` y `MODEL_EVAL` y vuelve a desplegar. Los nombres vigentes están en https://aistudio.google.com/docs/models.
+Ambos modelos por defecto tienen **plan Free** en la API de Gemini. Si `gemini-3.8-flash` está saturado (error 503), el proxy califica automáticamente con `gemini-3.5-flash-lite`. Si un modelo deja de estar disponible, cambia los nombres en `MODEL_CHAT` y `MODEL_EVAL` y vuelve a desplegar. Los nombres vigentes están en https://aistudio.google.com/docs/models.
 
 ## Control de cuota
 

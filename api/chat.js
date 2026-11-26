@@ -259,6 +259,8 @@ module.exports = async function handler(req, res) {
       store: false
     };
     let r = await callGemini(payload, isEval);
+    // Si el modelo de calificación está saturado, se usa el modelo del entrevistador.
+    if (isEval && r.status === 503) r = await callGemini(Object.assign({}, payload, { model: MODEL_CHAT }), true);
     // Si el proyecto no admite salida estructurada, se reintenta sin response_format.
     if (isEval && r.status === 400) r = await callGemini(Object.assign({}, payload, { response_format: undefined }), false);
     const data = await r.json().catch(() => null);
