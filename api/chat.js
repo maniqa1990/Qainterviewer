@@ -1,30 +1,86 @@
 'use strict';
 /**
- * Proxy hacia la API de Anthropic para el Simulador de Entrevistas QA.
+ * Proxy hacia la API de Gemini (Google AI Studio) para el Simulador de Entrevistas QA.
  * La clave vive solo en variables de entorno del servidor, nunca en la página.
  *
  * Variables de entorno:
- *   ANTHROPIC_API_KEY     (obligatoria) tu clave de console.anthropic.com
+ *   GEMINI_API_KEY        (obligatoria) tu clave de aistudio.google.com/api-keys (plan Free)
  *   ACCESS_CODE           (recomendada) código que deben escribir tus compañeros
- *   MODEL_CHAT            (opcional) modelo del entrevistador, por defecto claude-haiku-5-5
- *   MODEL_EVAL            (opcional) modelo de la calificación, por defecto claude-sonnet-5-5
- *   RATE_LIMIT_PER_HOUR   (opcional) llamadas por IP por hora, por defecto 120
- *   DAILY_CALL_CAP        (opcional) llamadas totales por día y por instancia, por defecto 1500
+ *   MODEL_CHAT            (opcional) modelo del entrevistador, por defecto gemini-3.5-flash-lite
+ *   MODEL_EVAL            (opcional) modelo de la calificación, por defecto gemini-3.8-flash
+ *   RATE_LIMIT_PER_HOUR   (opcional) llamadas por IP por hora, por defecto 60
+ *   DAILY_CALL_CAP        (opcional) llamadas totales por día y por instancia, por defecto 200
  */
 const crypto = require('crypto');
 
-const MODEL_CHAT = process.env.MODEL_CHAT || 'claude-haiku-5-5';
-const MODEL_EVAL = process.env.MODEL_EVAL || 'claude-sonnet-5-5';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+const MODEL_CHAT = process.env.MODEL_CHAT || 'gemini-3.5-flash-lite';
+const MODEL_EVAL = process.env.MODEL_EVAL || 'gemini-3.8-flash';
 const ACCESS_CODE = process.env.ACCESS_CODE || '';
-const RATE_PER_HOUR = parseInt(process.env.RATE_LIMIT_PER_HOUR || '120', 10);
-const DAILY_CAP = parseInt(process.env.DAILY_CALL_CAP || '1500', 10);
+const RATE_PER_HOUR = parseInt(process.env.RATE_LIMIT_PER_HOUR || '60', 10);
+const DAILY_CAP = parseInt(process.env.DAILY_CALL_CAP || '200', 10);
 
 const MAX_CHARS = 60000;
 const MAX_TURNS = 80;
-const MAX_TOKENS = { chat: 500, eval: 4000 };
+const MAX_TOKENS = { chat: 1024, eval: 8192 };
+
+// La calificación se solicita como JSON válido: evita texto alrededor del objeto.
+const EVAL_FORMAT = {
+  type: 'text',
+  mime_type: 'application/json',
+  schema: {
+    type: 'object',
+    properties: {
+      approved: { type: 'boolean' },
+      score: { type: 'integer' },
+      headline: { type: 'string' },
+      criteria: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            score: { type: 'integer' },
+            comment: { type: 'string' }
+          },
+          required: ['name', 'score', 'comment']
+        }
+      },
+      strengths: { type: 'array', items: { type: 'string' } },
+      improvements: { type: 'array', items: { type: 'string' } },
+      answers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            question: { type: 'string' },
+            candidate_said: { type: 'string' },
+            feedback: { type: 'string' },
+            better_answer: { type: 'string' }
+          },
+          required: ['question', 'candidate_said', 'feedback', 'better_answer']
+        }
+      },
+      english_notes: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            said: { type: 'string' },
+            better: { type: 'string' },
+            why: { type: 'string' }
+          },
+          required: ['said', 'better', 'why']
+        }
+      },
+      next_steps: { type: 'array', items: { type: 'string' } }
+    },
+    required: ['approved', 'score', 'headline', 'criteria', 'strengths', 'improvements', 'answers', 'english_notes', 'next_steps']
+  }
+};
 
 // Banco de preguntas: vive solo en el servidor y nunca se envía al navegador.
-// El entrevistador lo recibe como contexto del sistema con caché activada.
+// El entrevistador lo recibe como instrucción del sistema en cada llamada.
 const QUESTION_BANK = [
   // QA general (nivel semi-senior)
   'Tell me about a critical bug you found right before a release. How did you communicate it to the team?',
@@ -142,11 +198,42 @@ function normalize(messages) {
   return turns.map((t) => ({ role: t.role, content: t.content }));
 }
 
+// Gemini espera pasos alternos de usuario/modelo, con el texto dentro de "content".
+function toGeminiInput(turns) {
+  return turns.map((t) => ({
+    type: t.role === 'user' ? 'user_input' : 'model_output',
+    content: [{ type: 'text', text: t.content }]
+  }));
+}
+
+function callGemini(payload, structured) {
+  const headers = {
+    'x-goog-api-key': process.env.GEMINI_API_KEY,
+    'content-type': 'application/json'
+  };
+  if (structured) headers['Api-Revision'] = '2026-05-20';
+  return fetch(GEMINI_URL, { method: 'POST', headers, body: JSON.stringify(payload) });
+}
+
+function extractText(data) {
+  if (typeof data.output_text === 'string' && data.output_text.trim()) return data.output_text.trim();
+  const steps = Array.isArray(data.steps) ? data.steps : [];
+  const parts = [];
+  for (const step of steps) {
+    if (!step || step.type !== 'model_output') continue;
+    for (const item of Array.isArray(step.content) ? step.content : []) {
+      // Los pasos de "thinking" no se devuelven al navegador.
+      if (item && item.type === 'text' && typeof item.text === 'string') parts.push(item.text);
+    }
+  }
+  return parts.join('').trim();
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') return send(res, 200, { ok: true, needsCode: !!ACCESS_CODE });
   if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed' });
 
-  if (!process.env.ANTHROPIC_API_KEY) return send(res, 500, { error: 'server_misconfigured' });
+  if (!process.env.GEMINI_API_KEY) return send(res, 500, { error: 'server_misconfigured' });
   if (!codeOk(req)) return send(res, 401, { error: 'unauthorized' });
 
   let body = req.body;
@@ -160,36 +247,32 @@ module.exports = async function handler(req, res) {
   if (limited(req)) return send(res, 429, { error: 'rate_limited' });
 
   try {
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: body.kind === 'eval' ? MODEL_EVAL : MODEL_CHAT,
-        max_tokens: MAX_TOKENS[body.kind],
-        messages: turns,
-        // El banco viaja solo entre el servidor y Anthropic, con caché para no pagarlo en cada turno.
-        system: body.kind === 'chat' ? [{
-          type: 'text',
-          text: BANK_CONTEXT,
-          cache_control: { type: 'ephemeral' }
-        }] : undefined
-      })
-    });
+    const isEval = body.kind === 'eval';
+    const payload = {
+      model: isEval ? MODEL_EVAL : MODEL_CHAT,
+      input: toGeminiInput(turns),
+      generation_config: { max_output_tokens: MAX_TOKENS[body.kind] },
+      // El banco viaja solo entre el servidor y Gemini; nunca se envía al navegador.
+      system_instruction: isEval ? undefined : BANK_CONTEXT,
+      // La calificación llega como JSON válido, sin texto ni markdown alrededor.
+      response_format: isEval ? EVAL_FORMAT : undefined,
+      store: false
+    };
+    let r = await callGemini(payload, isEval);
+    // Si el proyecto no admite salida estructurada, se reintenta sin response_format.
+    if (isEval && r.status === 400) r = await callGemini(Object.assign({}, payload, { response_format: undefined }), false);
     const data = await r.json().catch(() => null);
     if (!r.ok) {
-      console.error('Anthropic API error', r.status, data && data.error && data.error.type);
+      console.error('Gemini API error', r.status, data && data.error && (data.error.status || data.error.message));
       if (r.status === 429) return send(res, 429, { error: 'rate_limited' });
-      if (r.status === 401 || r.status === 403 || r.status === 404) return send(res, 500, { error: 'server_misconfigured' });
+      if (r.status === 400 || r.status === 401 || r.status === 403 || r.status === 404) return send(res, 500, { error: 'server_misconfigured' });
       return send(res, 502, { error: 'upstream_error' });
     }
-    if (data.stop_reason === 'refusal') return send(res, 422, { error: 'refused' });
-    const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('').trim();
-    if (!text) return send(res, 502, { error: 'empty_completion' });
-    return send(res, 200, { text, truncated: data.stop_reason === 'max_tokens' });
+    if (data.status === 'failed') return send(res, 502, { error: 'upstream_error' });
+    if (data.status === 'cancelled' || data.status === 'requires_action') return send(res, 422, { error: 'refused' });
+    const text = extractText(data);
+    if (!text) return send(res, 502, { error: data.status === 'incomplete' ? 'empty_completion' : 'refused' });
+    return send(res, 200, { text, truncated: data.status === 'incomplete' });
   } catch (e) {
     console.error('Proxy error', e && e.message);
     return send(res, 502, { error: 'upstream_error' });

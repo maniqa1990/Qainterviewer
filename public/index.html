@@ -718,11 +718,11 @@ function setComposer(){
 function showError(e){
   var code = e && e.code;
   var msg = {
-    not_granted: 'Debes permitir que esta página use Claude para que el entrevistador pueda responder.',
-    sampling_disabled: 'Claude no está disponible para esta cuenta.',
+    not_granted: 'El servicio de IA no está disponible para esta cuenta.',
+    sampling_disabled: 'El servicio de IA no está disponible para esta cuenta.',
     rate_limited: 'Se alcanzó el límite de uso. Espera un momento y reintenta.',
     session_expired: 'Tu sesión expiró. Vuelve a iniciar sesión y reintenta.',
-    refused: 'Claude no pudo responder a ese mensaje. Reformúlalo y reintenta.',
+    refused: 'El entrevistador no pudo responder a ese mensaje. Reformúlalo y reintenta.',
     unauthorized: 'Falta el código de acceso o es incorrecto. Vuelve al inicio e introdúcelo.',
     too_large: 'Tu perfil o el historial de la entrevista es demasiado largo. Acórtalo e inténtalo de nuevo.',
     server_misconfigured: 'El servidor todavía no está configurado (falta la clave de API).'
@@ -862,7 +862,7 @@ function renderLoading(){
   cancel.onclick = function(){ if (S.evalCtl) S.evalCtl.abort(); leave(); };
   r.append(h('div', { class: 'loading' },
     h('h2', { text: 'Calificando tu entrevista…' }),
-    h('p', { class: 'muted', text: 'Claude está revisando la transcripción completa. Puede tardar hasta un minuto.' }),
+    h('p', { class: 'muted', text: 'Se está revisando la transcripción completa. Puede tardar hasta un minuto.' }),
     h('div', { class: 'pulse' }),
     cancel
   ));
